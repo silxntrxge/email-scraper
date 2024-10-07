@@ -105,8 +105,8 @@ def scrape_emails(driver, name, domain, niche, num_pages=5):
 def main():
     logger.info("Starting the scraper...")
     config = load_config()
-    names = [name.strip() for name in config['names'].split(',')]
-    niches = [niche.strip() for niche in config['niche'].split(',')]
+    names = config['names'].split(',')
+    niches = config['niche'].split(',')
     domain = config['domain']
     
     driver = initialize_driver()
@@ -115,7 +115,7 @@ def main():
     for name in names:
         for niche in niches:
             try:
-                emails = scrape_emails(driver, name, domain, niche)
+                emails = scrape_emails(driver, name.strip(), domain, niche.strip())
                 all_emails.update(emails)
             except Exception as e:
                 logger.error(f"Error processing query for name '{name}' and niche '{niche}': {str(e)}")

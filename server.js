@@ -1,15 +1,37 @@
 const express = require('express');
+const bodyParser = require('body-parser');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const axios = require('axios');
 
 const app = express();
-app.use(express.json());
+
+// Increase JSON size limit to 100mb
+app.use(bodyParser.json({ limit: '100mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '100mb' }));
+
+// Log raw request body (truncated for very large payloads)
+app.use((req, res, next) => {
+    let data = '';
+    req.on('data', chunk => {
+        data += chunk;
+        if (data.length > 1000000) { // Log only first 1MB
+            console.log('Raw request body (truncated):', data.slice(0, 1000000));
+            req.removeAllListeners('data');
+        }
+    });
+    req.on('end', () => {
+        if (data.length <= 1000000) {
+            console.log('Raw request body:', data);
+        }
+        next();
+    });
+});
 
 const PORT = process.env.PORT || 10000;
 
 app.post('/scrape-emails', (req, res) => {
-    console.log('Received POST request:', req.body);
+    console.log('Received POST request. Body length:', JSON.stringify(req.body).length);
     const { recordId, names, domain, niche, webhook } = req.body;
 
     // Write the configuration to a file
@@ -35,7 +57,7 @@ app.post('/scrape-emails', (req, res) => {
         
         if (code === 0) {
             // Read the emails from the file
-            fs.readFile('emails.txt', 'utf8', (err, data) => {
+            fs.readFile('final_combined_emails.txt', 'utf8', (err, data) => {
                 if (err) {
                     console.error('Error reading emails file:', err);
                     res.status(500).send('Error reading emails');
@@ -60,6 +82,12 @@ app.post('/scrape-emails', (req, res) => {
             res.status(500).send('Error during scraping process');
         }
     });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).send('Something broke!');
 });
 
 app.listen(PORT, () => {
