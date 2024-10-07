@@ -61,65 +61,68 @@ def save_emails(emails, output_file='emails.txt'):
 def perform_search(driver, query, start):
     encoded_query = urllib.parse.quote(query)
     search_url = f"https://www.google.com/search?q={encoded_query}&start={start}"
+    logger.info(f"Navigating to search URL: {search_url}")
     driver.get(search_url)
-    print(f"Navigated to search URL: {search_url}")
     
     try:
         consent_button = WebDriverWait(driver, 5).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Accept all')]"))
         )
         consent_button.click()
-        print("Accepted consent dialog")
+        logger.info("Accepted consent dialog")
     except TimeoutException:
-        print("No consent dialog found or already accepted")
+        logger.info("No consent dialog found or already accepted")
     
     try:
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.ID, "search"))
         )
-        print("Search results loaded successfully")
+        logger.info("Search results loaded successfully")
     except TimeoutException:
-        print("Timed out waiting for search results")
+        logger.error("Timed out waiting for search results")
         raise
 
-def scrape_emails(driver, name, domain, niche, num_pages=5):
-    logger.info(f"Scraping emails for name: {name}, domain: {domain}, niche: {niche}")
+def scrape_emails(driver, name, domain, niches, num_pages=5):
+    logger.info(f"Starting email scraping for name: {name}, domain: {domain}")
     collected_emails = set()
-    for page in range(num_pages):
-        start = page * 10 + 1
-        query = f'"{name}" "{domain}" "{niche}"'
-        perform_search(driver, query, start)
-        logger.info(f"Scraping page {page + 1}...")
-        time.sleep(2)  # Wait for the page to load
-        page_source = driver.page_source
-        emails = get_emails(page_source)
-        logger.info(f"Found {len(emails)} emails on page {page + 1}.")
-        collected_emails.update(emails)
-        
-        # Save emails after each page to avoid data loss
-        save_emails(collected_emails, f"emails_{name.replace(' ', '_')}_{domain}_{niche.replace(' ', '_')}.txt")
+    for niche in niches:
+        logger.info(f"Searching for niche: {niche}")
+        for page in range(num_pages):
+            start = page * 10 + 1
+            query = f'"{name}" "{domain}" "{niche}"'
+            logger.info(f"Switching to page {page + 1} (start: {start})")
+            perform_search(driver, query, start)
+            logger.info(f"Successfully loaded page {page + 1}")
+            time.sleep(2)  # Wait for the page to load
+            page_source = driver.page_source
+            emails = get_emails(page_source)
+            logger.info(f"Found {len(emails)} emails on page {page + 1}")
+            collected_emails.update(emails)
+            
+            # Save emails after each page to avoid data loss
+            save_emails(collected_emails, f"emails_{name.replace(' ', '_')}_{domain}_{niche.replace(' ', '_')}.txt")
+            logger.info(f"Saved {len(collected_emails)} unique emails so far")
     
-    logger.info(f"Total emails collected for {name}: {len(collected_emails)}")
+    logger.info(f"Finished scraping for {name}. Total emails collected: {len(collected_emails)}")
     return collected_emails
 
 def main():
     logger.info("Starting the scraper...")
     config = load_config()
-    names = config['names'].split(',')
-    niches = config['niche'].split(',')
+    names = [name.strip() for name in config['names'].split(',')]
+    niches = [niche.strip() for niche in config['niche'].split(',')]
     domain = config['domain']
     
     driver = initialize_driver()
     
     all_emails = set()
     for name in names:
-        for niche in niches:
-            try:
-                emails = scrape_emails(driver, name.strip(), domain, niche.strip())
-                all_emails.update(emails)
-            except Exception as e:
-                logger.error(f"Error processing query for name '{name}' and niche '{niche}': {str(e)}")
-                continue  # Move to the next combination
+        try:
+            emails = scrape_emails(driver, name, domain, niches)
+            all_emails.update(emails)
+        except Exception as e:
+            logger.error(f"Error processing query for name '{name}': {str(e)}")
+            continue  # Move to the next name
     
     driver.quit()
     logger.info("WebDriver closed.")

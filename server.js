@@ -6,8 +6,16 @@ const axios = require('axios');
 
 const app = express();
 
-// Increase JSON size limit to 100mb
-app.use(bodyParser.json({ limit: '100mb' }));
+// Increase JSON size limit to 100mb and add reviver function to handle newlines
+app.use(bodyParser.json({
+  limit: '100mb',
+  reviver: (key, value) => {
+    if (typeof value === 'string') {
+      return value.trim();
+    }
+    return value;
+  }
+}));
 app.use(bodyParser.urlencoded({ extended: true, limit: '100mb' }));
 
 // Log raw request body (truncated for very large payloads)
@@ -35,11 +43,13 @@ app.post('/scrape-emails', (req, res) => {
     const { recordId, names, domain, niche, webhook } = req.body;
 
     // Write the configuration to a file
-    const config = JSON.stringify({ names, domain, niche });
+    const config = JSON.stringify({ names, domain, niche }, null, 2);
     fs.writeFileSync('config.json', config);
 
     console.log('Starting email scraping process...');
-    const pythonProcess = spawn('python3', ['scraper.py']);
+    const pythonProcess = spawn('python3', ['scraper.py'], {
+        env: { ...process.env, PYTHONUNBUFFERED: '1', LOGLEVEL: 'INFO' }
+    });
 
     let pythonOutput = '';
 
