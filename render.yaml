@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: email-extractor-api
+    env: node
+    plan: free
+    buildCommand: |
+      apt-get update && apt-get install -y python3 python3-pip
+      apt-get install -y wget unzip xvfb libxi6 libgconf-2-4
+      wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
+      sh -c 'echo "deb http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
+      apt-get update && apt-get install -y google-chrome-stable
+      pip3 install selenium webdriver-manager
+      npm install
+    startCommand: |
+      node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8080
+      - key: GOOGLE_API_KEY
+        sync: false # This will prompt you to enter the value in the Render dashboard
+    autoDeploy: true
+    region: frankfurt
