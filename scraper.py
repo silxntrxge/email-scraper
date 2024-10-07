@@ -20,15 +20,15 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def load_config():
-    print("Loading configuration...")
+    logger.info("Loading configuration...")
     config_path = 'config.json'
     try:
         with open(config_path, 'r') as f:
             config = json.load(f)
-        print("Configuration loaded successfully.")
+        logger.info("Configuration loaded successfully.")
         return config
     except Exception as e:
-        print(f"Error loading configuration: {e}")
+        logger.error(f"Error loading configuration: {e}")
         sys.exit(1)
 
 def initialize_driver():
@@ -82,11 +82,12 @@ def perform_search(driver, query, start):
         print("Timed out waiting for search results")
         raise
 
-def scrape_emails(driver, query, num_pages=5):
-    logger.info(f"Scraping emails for query: {query}")
+def scrape_emails(driver, name, domain, niche, num_pages=5):
+    logger.info(f"Scraping emails for name: {name}, domain: {domain}, niche: {niche}")
     collected_emails = set()
     for page in range(num_pages):
         start = page * 10 + 1
+        query = f'"{name}" "{domain}" "{niche}"'
         perform_search(driver, query, start)
         logger.info(f"Scraping page {page + 1}...")
         time.sleep(2)  # Wait for the page to load
@@ -96,44 +97,35 @@ def scrape_emails(driver, query, num_pages=5):
         collected_emails.update(emails)
         
         # Save emails after each page to avoid data loss
-        save_emails(collected_emails, f"emails_{query.replace(' ', '_')}.txt")
+        save_emails(collected_emails, f"emails_{name.replace(' ', '_')}_{domain}_{niche.replace(' ', '_')}.txt")
     
-    logger.info(f"Total emails collected for query '{query}': {len(collected_emails)}")
+    logger.info(f"Total emails collected for {name}: {len(collected_emails)}")
     return collected_emails
 
 def main():
     logger.info("Starting the scraper...")
     config = load_config()
     names = [name.strip() for name in config['names'].split(',')]
-    niche = config['niche']
+    niches = [niche.strip() for niche in config['niche'].split(',')]
     domain = config['domain']
     
     driver = initialize_driver()
     
     all_emails = set()
     for name in names:
-        query = f'"{name}" "{domain}" "{niche}"'
-        try:
-            emails = scrape_emails(driver, query)
-            all_emails.update(emails)
-        except Exception as e:
-            logger.error(f"Error processing query '{query}': {str(e)}")
-            continue  # Move to the next query
+        for niche in niches:
+            try:
+                emails = scrape_emails(driver, name, domain, niche)
+                all_emails.update(emails)
+            except Exception as e:
+                logger.error(f"Error processing query for name '{name}' and niche '{niche}': {str(e)}")
+                continue  # Move to the next combination
     
     driver.quit()
     logger.info("WebDriver closed.")
     
-    # Combine all individual query results
-    logger.info("Combining all email results...")
-    combined_emails = set()
-    for name in names:
-        filename = f"emails_{name.replace(' ', '_')}_{domain}_{niche}.txt"
-        if os.path.exists(filename):
-            with open(filename, 'r') as f:
-                combined_emails.update(f.read().splitlines())
-    
     # Save the final combined result
-    save_emails(combined_emails, 'final_combined_emails.txt')
+    save_emails(all_emails, 'final_combined_emails.txt')
     logger.info("Scraper finished successfully.")
 
 if __name__ == "__main__":
